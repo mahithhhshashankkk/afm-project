@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { App as CapacitorApp } from '@capacitor/app';
 import { Navbar } from '@/components/Navbar';
 import { Hero } from '@/components/Hero';
 import { StatsBar } from '@/components/StatsBar';
@@ -25,6 +27,22 @@ function useHashRoute() {
 
 function App() {
   const hash = useHashRoute();
+
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== 'android') return;
+
+    const listener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+      if (canGoBack) {
+        window.history.back();
+      } else {
+        void CapacitorApp.exitApp();
+      }
+    });
+
+    return () => {
+      void listener.then((handle) => handle.remove());
+    };
+  }, []);
 
   if (hash === '#admin') {
     return <AdminDashboard />;

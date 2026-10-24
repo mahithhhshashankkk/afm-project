@@ -6,17 +6,23 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "cap:sync": "cap sync",
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/core": "^7.6.9",
+    "@capacitor/ios": "^7.6.9",
     "@supabase/supabase-js": "^2.57.4",
     "lucide-react": "^0.446.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.9",
     "@eslint/js": "^9.9.1",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
