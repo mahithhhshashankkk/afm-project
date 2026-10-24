@@ -1,11 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  Recycle, LogOut, Search, Mail, Building2, Users, Clock,
-  CheckCircle2, XCircle, Loader2, Inbox, TrendingUp, Calendar,
-  ArrowLeft, Trash2, ChevronDown,
+  Recycle, Search, Mail, Building2, Users, Clock,
+  XCircle, Loader2, Inbox, Calendar,
+  ArrowLeft, Trash2, ChevronDown, Bell, MessageSquare,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import type { Session } from '@supabase/supabase-js';
 
 interface DemoRequest {
   id: string;
@@ -28,37 +27,24 @@ const STATUS_CONFIG: Record<DemoRequest['status'], { label: string; color: strin
 const STATUSES = Object.entries(STATUS_CONFIG) as [DemoRequest['status'], typeof STATUS_CONFIG[DemoRequest['status']]][];
 
 export function AdminDashboard() {
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<DemoRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<DemoRequest['status'] | 'all'>('all');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [newCount, setNewCount] = useState(0);
+  const [selectedRequest, setSelectedRequest] = useState<DemoRequest | null>(null);
+
+  const computeStats = (all: DemoRequest[]) => ({
+    total: all.length,
+    pending: all.filter((r) => r.status === 'pending').length,
+    contacted: all.filter((r) => r.status === 'contacted').length,
+    scheduled: all.filter((r) => r.status === 'demo_scheduled').length,
+  });
   const [stats, setStats] = useState({ total: 0, pending: 0, contacted: 0, scheduled: 0 });
 
-  // Auth form state
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authError, setAuthError] = useState('');
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setLoading(false);
-    });
-
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
   const fetchRequests = useCallback(async () => {
-    if (!session) return;
     const { data, error } = await supabase
       .from('demo_requests')
       .select('*')
@@ -66,34 +52,53 @@ export function AdminDashboard() {
 
     if (error) {
       setError('Failed to load requests');
+      setLoading(false);
       return;
     }
-    setRequests(data as DemoRequest[]);
     const all = data as DemoRequest[];
-    setStats({
-      total: all.length,
-      pending: all.filter((r) => r.status === 'pending').length,
-      contacted: all.filter((r) => r.status === 'contacted').length,
-      scheduled: all.filter((r) => r.status === 'demo_scheduled').length,
-    });
-  }, [session]);
+    setRequests(all);
+    setStats(computeStats(all));
+    setLoading(false);
+  }, []);
 
+  // Initial load + realtime subscription
   useEffect(() => {
     fetchRequests();
+
+    const channel = supabase
+      .channel('demo_requests_changes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'demo_requests' }, (payload) => {
+        const newReq = payload.new as DemoRequest;
+        setRequests((prev) => {
+          if (prev.some((r) => r.id === newReq.id)) return prev;
+          const updated = [newReq, ...prev];
+          setStats(computeStats(updated));
+          return updated;
+        });
+        setNewCount((c) => c + 1);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'demo_requests' }, (payload) => {
+        const updatedReq = payload.new as DemoRequest;
+        setRequests((prev) => {
+          const updated = prev.map((r) => (r.id === updatedReq.id ? updatedReq : r));
+          setStats(computeStats(updated));
+          return updated;
+        });
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'demo_requests' }, (payload) => {
+        const deletedId = (payload.old as { id: string }).id;
+        setRequests((prev) => {
+          const updated = prev.filter((r) => r.id !== deletedId);
+          setStats(computeStats(updated));
+          return updated;
+        });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchRequests]);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthLoading(true);
-    setAuthError('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setAuthError(error.message);
-      setAuthLoading(false);
-    }
-  };
-
-  const handleLogout = () => supabase.auth.signOut();
 
   const updateStatus = async (id: string, status: DemoRequest['status']) => {
     setUpdatingId(id);
@@ -103,7 +108,6 @@ export function AdminDashboard() {
       setUpdatingId(null);
       return;
     }
-    await fetchRequests();
     setUpdatingId(null);
   };
 
@@ -113,7 +117,7 @@ export function AdminDashboard() {
       setError('Failed to delete request');
       return;
     }
-    await fetchRequests();
+    if (selectedRequest?.id === id) setSelectedRequest(null);
   };
 
   const filtered = requests.filter((r) => {
@@ -133,76 +137,6 @@ export function AdminDashboard() {
     );
   }
 
-  if (!session) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-ink-50 px-6 py-12">
-        <div className="w-full max-w-md">
-          <div className="rounded-3xl border border-ink-100 bg-white p-8 shadow-xl shadow-ink-900/5">
-            <div className="flex flex-col items-center text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-600 shadow-lg shadow-primary-600/30">
-                <Recycle className="h-7 w-7 text-white" strokeWidth={2.5} />
-              </div>
-              <h1 className="mt-5 font-display text-2xl font-extrabold text-ink-900">WasteHero Admin</h1>
-              <p className="mt-1 text-sm text-ink-400">Sign in to manage demo requests</p>
-            </div>
-
-            {authError && (
-              <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                {authError}
-              </div>
-            )}
-
-            <form onSubmit={handleLogin} className="mt-6 space-y-4">
-              <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-500">
-                  Email
-                </label>
-                <input
-                  required
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm font-medium text-ink-800 transition-colors focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200"
-                  placeholder="admin@wastehero.in"
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-500">
-                  Password
-                </label>
-                <input
-                  required
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm font-medium text-ink-800 transition-colors focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-200"
-                  placeholder="••••••••"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={authLoading}
-                className="btn-primary w-full justify-center disabled:opacity-60"
-              >
-                {authLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign In'}
-              </button>
-            </form>
-
-            <a
-              href="#"
-              onClick={() => (window.location.hash = '')}
-              className="mt-6 flex items-center justify-center gap-2 text-sm font-semibold text-ink-500 transition-colors hover:text-primary-600"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to website
-            </a>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Dashboard
   return (
     <div className="min-h-screen bg-ink-50">
       {/* Top bar */}
@@ -210,36 +144,37 @@ export function AdminDashboard() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-600 shadow-lg shadow-primary-600/30">
-              <Recycle className="h-4.5 w-4.5 text-white" strokeWidth={2.5} />
+              <Recycle className="h-4 w-4 text-white" strokeWidth={2.5} />
             </div>
             <span className="font-display text-lg font-extrabold tracking-tight text-ink-900">
               Waste<span className="text-primary-600">Hero</span>
               <span className="ml-2 text-xs font-medium text-ink-400">Admin</span>
             </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {newCount > 0 && (
+              <div className="flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1.5 text-xs font-bold text-primary-700">
+                <Bell className="h-3.5 w-3.5 animate-bounce-slow" />
+                {newCount} new
+              </div>
+            )}
             <a
               href="#"
               onClick={() => (window.location.hash = '')}
-              className="hidden items-center gap-2 text-sm font-semibold text-ink-500 transition-colors hover:text-primary-600 sm:flex"
+              className="inline-flex items-center gap-2 rounded-full border border-ink-200 bg-white px-4 py-2 text-sm font-semibold text-ink-600 transition-colors hover:border-primary-300 hover:text-primary-600"
             >
               <ArrowLeft className="h-4 w-4" />
-              View Site
+              <span className="hidden sm:inline">Back to Site</span>
             </a>
-            <button
-              onClick={handleLogout}
-              className="inline-flex items-center gap-2 rounded-full border border-ink-200 bg-white px-4 py-2 text-sm font-semibold text-ink-600 transition-colors hover:border-red-200 hover:text-red-600"
-            >
-              <LogOut className="h-4 w-4" />
-              Sign Out
-            </button>
           </div>
         </div>
       </header>
 
       <div className="mx-auto max-w-7xl px-6 py-8 lg:px-8">
         <h1 className="font-display text-2xl font-extrabold text-ink-900">Demo Requests</h1>
-        <p className="mt-1 text-sm text-ink-400">Manage and track all incoming demo requests</p>
+        <p className="mt-1 text-sm text-ink-400">
+          All incoming demo requests appear here in real time. When someone submits the form, it shows up instantly.
+        </p>
 
         {/* Stats cards */}
         <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -281,7 +216,7 @@ export function AdminDashboard() {
           <div className="flex gap-2 overflow-x-auto pb-1">
             <button
               onClick={() => setFilter('all')}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                 filter === 'all' ? 'bg-ink-900 text-white' : 'bg-white text-ink-500 hover:bg-ink-100'
               }`}
             >
@@ -291,7 +226,7 @@ export function AdminDashboard() {
               <button
                 key={key}
                 onClick={() => setFilter(key)}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
                   filter === key ? 'bg-ink-900 text-white' : 'bg-white text-ink-500 hover:bg-ink-100'
                 }`}
               >
@@ -306,9 +241,9 @@ export function AdminDashboard() {
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <Inbox className="h-12 w-12 text-ink-300" />
-              <p className="mt-4 font-display text-lg font-bold text-ink-700">No requests found</p>
+              <p className="mt-4 font-display text-lg font-bold text-ink-700">No requests yet</p>
               <p className="mt-1 text-sm text-ink-400">
-                {requests.length === 0 ? 'New demo requests will appear here.' : 'Try adjusting your search or filter.'}
+                When someone submits the demo request form on the website, it will appear here instantly.
               </p>
             </div>
           ) : (
@@ -327,8 +262,12 @@ export function AdminDashboard() {
                 <tbody className="divide-y divide-ink-100">
                   {filtered.map((req) => {
                     const cfg = STATUS_CONFIG[req.status];
+                    const isLatest = new Date(req.created_at).getTime() > Date.now() - 10000;
                     return (
-                      <tr key={req.id} className="transition-colors hover:bg-ink-50/50">
+                      <tr
+                        key={req.id}
+                        className={`transition-colors hover:bg-ink-50/50 ${isLatest ? 'animate-fade-in bg-primary-50/30' : ''}`}
+                      >
                         <td className="px-5 py-4">
                           <div className="flex items-center gap-3">
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700">
@@ -377,6 +316,13 @@ export function AdminDashboard() {
                         </td>
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setSelectedRequest(req)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-primary-50 hover:text-primary-600"
+                              title="View details"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </button>
                             <a
                               href={`mailto:${req.email}`}
                               className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
@@ -408,6 +354,102 @@ export function AdminDashboard() {
           </p>
         )}
       </div>
+
+      {/* Detail modal */}
+      {selectedRequest && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 p-4 backdrop-blur-sm"
+          onClick={() => setSelectedRequest(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl border border-ink-100 bg-white p-8 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-100 font-display text-sm font-bold text-primary-700">
+                  {selectedRequest.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-bold text-ink-900">{selectedRequest.name}</h3>
+                  <p className="text-sm text-ink-400">{selectedRequest.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedRequest(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-ink-100"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-xl bg-ink-50 p-4">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-ink-400">
+                    <Building2 className="h-3.5 w-3.5" />
+                    Institution
+                  </div>
+                  <p className="mt-1.5 text-sm font-semibold text-ink-800">{selectedRequest.institution}</p>
+                </div>
+                <div className="rounded-xl bg-ink-50 p-4">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-ink-400">
+                    <Users className="h-3.5 w-3.5" />
+                    Residents
+                  </div>
+                  <p className="mt-1.5 text-sm font-semibold text-ink-800">{selectedRequest.residents}</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-ink-50 p-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-ink-400">
+                  <Calendar className="h-3.5 w-3.5" />
+                  Submitted
+                </div>
+                <p className="mt-1.5 text-sm font-semibold text-ink-800">
+                  {new Date(selectedRequest.created_at).toLocaleString('en-IN', {
+                    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                  })}
+                </p>
+              </div>
+
+              {selectedRequest.message && (
+                <div className="rounded-xl bg-primary-50 p-4">
+                  <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-primary-600">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Message
+                  </div>
+                  <p className="mt-1.5 text-sm leading-relaxed text-ink-700">{selectedRequest.message}</p>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 border-t border-ink-100 pt-4">
+                <span className="text-xs font-bold uppercase tracking-wide text-ink-400">Status:</span>
+                <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-bold ${STATUS_CONFIG[selectedRequest.status].bg} ${STATUS_CONFIG[selectedRequest.status].color}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${STATUS_CONFIG[selectedRequest.status].dot}`} />
+                  {STATUS_CONFIG[selectedRequest.status].label}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <a
+                href={`mailto:${selectedRequest.email}`}
+                className="btn-primary flex-1 justify-center"
+              >
+                <Mail className="h-4 w-4" />
+                Reply via Email
+              </a>
+              <button
+                onClick={() => setSelectedRequest(null)}
+                className="btn-secondary"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
