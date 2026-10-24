@@ -6,6 +6,7 @@ const FOOTER_LINKS = [
     links: [
       { label: 'Features', href: '#features' },
       { label: 'How It Works', href: '#how-it-works' },
+      { label: 'ROI Calculator', href: '#roi-calculator' },
       { label: 'Pricing', href: '#pricing' },
       { label: 'Request Demo', href: '#contact' },
     ],
@@ -23,9 +24,10 @@ const FOOTER_LINKS = [
     title: 'Company',
     links: [
       { label: 'About WasteHero', href: '#top' },
+      { label: 'Case Studies', href: '#case-studies' },
       { label: 'Sustainability Impact', href: '#impact' },
       { label: 'Pilot Programs', href: '#pricing' },
-      { label: 'Contact Us', href: '#contact' },
+      { label: 'Admin Dashboard', href: '#admin' },
     ],
   },
 ];

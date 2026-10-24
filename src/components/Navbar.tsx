@@ -6,6 +6,8 @@ const NAV_LINKS = [
   { label: 'How It Works', href: '#how-it-works' },
   { label: 'Benefits', href: '#benefits' },
   { label: 'Impact', href: '#impact' },
+  { label: 'ROI', href: '#roi-calculator' },
+  { label: 'Case Studies', href: '#case-studies' },
   { label: 'Pricing', href: '#pricing' },
 ];
 
@@ -49,8 +51,8 @@ export function Navbar() {
         </div>
 
         <div className="hidden items-center gap-3 lg:flex">
-          <a href="#contact" className="btn-ghost">
-            Sign In
+          <a href="#admin" className="btn-ghost">
+            Admin
           </a>
           <a href="#contact" className="btn-primary">
             Request Demo
@@ -79,7 +81,10 @@ export function Navbar() {
                 {link.label}
               </a>
             ))}
-            <a href="#contact" onClick={() => setOpen(false)} className="btn-primary mt-3 w-full">
+            <a href="#admin" onClick={() => setOpen(false)} className="btn-ghost mt-2 w-full">
+              Admin Dashboard
+            </a>
+            <a href="#contact" onClick={() => setOpen(false)} className="btn-primary mt-2 w-full">
               Request Demo
             </a>
           </div>
