@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { ArrowRight, Mail, Phone, Building2, CheckCircle2, Recycle } from 'lucide-react';
+import { ArrowRight, Mail, Phone, Building2, CheckCircle2, Recycle, AlertCircle, Loader2 } from 'lucide-react';
 import { useReveal } from '@/hooks/useReveal';
+import { supabase } from '@/lib/supabase';
 
 export function ContactCTA() {
   const { ref, visible } = useReveal();
-  const [submitted, setSubmitted] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -13,9 +14,24 @@ export function ContactCTA() {
     message: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setStatus('loading');
+
+    const { error } = await supabase.from('demo_requests').insert({
+      name: form.name,
+      email: form.email,
+      institution: form.institution,
+      residents: form.residents,
+      message: form.message || null,
+    });
+
+    if (error) {
+      setStatus('error');
+      return;
+    }
+
+    setStatus('success');
   };
 
   const inputClass =
@@ -77,7 +93,7 @@ export function ContactCTA() {
 
             {/* Right: form */}
             <div className="p-10 lg:p-12">
-              {submitted ? (
+              {status === 'success' ? (
                 <div className="flex h-full flex-col items-center justify-center text-center">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
                     <CheckCircle2 className="h-8 w-8 text-green-600" />
@@ -88,7 +104,7 @@ export function ContactCTA() {
                   </p>
                   <button
                     onClick={() => {
-                      setSubmitted(false);
+                      setStatus('idle');
                       setForm({ name: '', email: '', institution: '', residents: '', message: '' });
                     }}
                     className="btn-ghost mt-6"
@@ -100,12 +116,25 @@ export function ContactCTA() {
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <h3 className="font-display text-xl font-bold text-ink-900">Request a Demo</h3>
 
+                  {status === 'error' && (
+                    <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
+                      <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+                      <div>
+                        <p className="text-sm font-bold text-red-800">Something went wrong</p>
+                        <p className="mt-0.5 text-xs text-red-600">
+                          We couldn't submit your request. Please try again or email us directly at hello@wastehero.in.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-ink-500">
                       Full Name
                     </label>
                     <input
                       required
+                      disabled={status === 'loading'}
                       type="text"
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -121,6 +150,7 @@ export function ContactCTA() {
                       </label>
                       <input
                         required
+                        disabled={status === 'loading'}
                         type="email"
                         value={form.email}
                         onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -134,6 +164,7 @@ export function ContactCTA() {
                       </label>
                       <select
                         required
+                        disabled={status === 'loading'}
                         value={form.residents}
                         onChange={(e) => setForm({ ...form, residents: e.target.value })}
                         className={inputClass}
@@ -153,6 +184,7 @@ export function ContactCTA() {
                     </label>
                     <input
                       required
+                      disabled={status === 'loading'}
                       type="text"
                       value={form.institution}
                       onChange={(e) => setForm({ ...form, institution: e.target.value })}
@@ -166,6 +198,7 @@ export function ContactCTA() {
                       Message <span className="font-normal text-ink-300">(optional)</span>
                     </label>
                     <textarea
+                      disabled={status === 'loading'}
                       value={form.message}
                       onChange={(e) => setForm({ ...form, message: e.target.value })}
                       rows={3}
@@ -174,9 +207,22 @@ export function ContactCTA() {
                     />
                   </div>
 
-                  <button type="submit" className="btn-primary w-full justify-center text-base">
-                    Request Demo
-                    <ArrowRight className="h-4 w-4" />
+                  <button
+                    type="submit"
+                    disabled={status === 'loading'}
+                    className="btn-primary w-full justify-center text-base disabled:opacity-60 disabled:hover:translate-y-0"
+                  >
+                    {status === 'loading' ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        Request Demo
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
                   </button>
                   <p className="text-center text-xs text-ink-400">
                     No credit card required. We respond within 24 hours.
