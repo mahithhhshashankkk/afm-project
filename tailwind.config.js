@@ -77,7 +77,7 @@ export default {
       },
       backgroundImage: {
         'grid-pattern': "url(\"data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M60 0H0V60' fill='none' stroke='%23e2e8f0' stroke-width='0.5'/%3E%3C/svg%3E\")",
-        'dot-pattern': "url(\"data:image/svg+xml,%3Csvg width='40' height='40' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1.5' fill='%23f97316' opacity='0.15'/%3E%3C/svg%3E\")",
+        'dot-pattern': "url(\"data:image/svg+xml,%3Csvg width='40' height='40' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1.5' fill='%2322c55e' opacity='0.15'/%3E%3C/svg%3E\")",
       },
     },
   },
