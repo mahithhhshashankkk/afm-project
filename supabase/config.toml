@@ -1,0 +1,2 @@
+[functions.wastehero-chat]
+verify_jwt = false

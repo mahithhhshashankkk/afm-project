@@ -14,6 +14,7 @@ import { Pricing } from '@/components/Pricing';
 import { ContactCTA } from '@/components/ContactCTA';
 import { Footer } from '@/components/Footer';
 import { AdminDashboard } from '@/components/AdminDashboard';
+import { Chatbot } from '@/components/Chatbot';
 
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash);
@@ -64,6 +65,7 @@ function App() {
         <ContactCTA />
       </main>
       <Footer />
+      <Chatbot />
     </div>
   );
 }
